@@ -1,0 +1,1721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vande Bharat Express – Interactive Dashboard (June 2026)</title>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; }
+header { background: linear-gradient(135deg, #1a2a4a 0%, #0d3b6e 100%); padding: 18px 28px; display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #f97316; }
+header h1 { font-size: 1.5rem; font-weight: 700; color: #fff; }
+header span { background: #f97316; color: #fff; font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.badge-green { background: #16a34a !important; }
+.main { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - 68px); }
+.sidebar { background: #161b27; overflow-y: auto; padding: 16px; border-right: 1px solid #2d3748; display: flex; flex-direction: column; gap: 12px; }
+.filter-section { background: #1e2535; border-radius: 10px; padding: 14px; }
+.filter-section h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 10px; }
+.search-box { width: 100%; padding: 9px 12px; background: #0f1117; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 0.9rem; }
+.search-box:focus { outline: none; border-color: #f97316; }
+.btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-btn { padding: 5px 12px; font-size: 0.78rem; border-radius: 999px; border: 1px solid #334155; background: transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s; }
+.filter-btn:hover, .filter-btn.active { background: #f97316; border-color: #f97316; color: #fff; font-weight: 600; }
+.filter-btn.type-sleeper.active { background: #7c3aed; border-color: #7c3aed; }
+.stats-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.stat-card { background: #1e2535; border-radius: 8px; padding: 10px; text-align: center; }
+.stat-num { font-size: 1.4rem; font-weight: 700; color: #f97316; }
+.stat-lbl { font-size: 0.7rem; color: #64748b; margin-top: 2px; }
+.route-list { flex: 1; overflow-y: auto; }
+.route-card { background: #1e2535; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.2s; }
+.route-card:hover { border-left-color: #f97316; background: #253048; }
+.route-card.active { border-left-color: #f97316; background: #253048; }
+.route-card .rno { font-size: 0.7rem; color: #64748b; font-family: monospace; }
+.route-card .rname { font-size: 0.87rem; font-weight: 600; color: #e2e8f0; margin: 3px 0; }
+.route-card .rmeta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tag { font-size: 0.68rem; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+.tag-region { background: #1e3a5f; color: #60a5fa; }
+.tag-coaches { background: #1a3320; color: #4ade80; }
+.tag-type { background: #2d1a4a; color: #c084fc; }
+.tag-freq { background: #1a2a1a; color: #86efac; }
+.action-links { display: flex; gap: 6px; margin-top: 8px; }
+.action-links a { font-size: 0.68rem; padding: 3px 8px; border-radius: 5px; text-decoration: none; font-weight: 600; }
+.a-live { background: #dc2626; color: #fff; }
+.a-sched { background: #0284c7; color: #fff; }
+.a-book { background: #16a34a; color: #fff; }
+#map { width: 100%; height: 100%; z-index: 1; }
+.no-results { color: #64748b; text-align: center; padding: 40px 20px; font-size: 0.9rem; }
+.count-label { font-size: 0.75rem; color: #64748b; padding: 4px 2px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🚄 Vande Bharat Express – India Route Dashboard</h1>
+  </div>
+  <span>82 Routes · June 2026</span>
+  <span class="badge-green">164 Services</span>
+</header>
+<div class="main">
+  <div class="sidebar">
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-num" id="st-total">82</div><div class="stat-lbl">Total Routes</div></div>
+      <div class="stat-card"><div class="stat-num" id="st-chair" style="color:#60a5fa">81</div><div class="stat-lbl">Chair Car</div></div>
+      <div class="stat-card"><div class="stat-num" id="st-sleep" style="color:#c084fc">1</div><div class="stat-lbl">Sleeper</div></div>
+    </div>
+
+    <div class="filter-section">
+      <h3>🔍 Search Route / Station</h3>
+      <input class="search-box" id="searchInput" placeholder="e.g. Hyderabad, Secunderabad, Chennai..."/>
+    </div>
+
+    <div class="filter-section">
+      <h3>🗺️ Filter by Region</h3>
+      <div class="btn-group" id="regionFilters">
+        <button class="filter-btn active" data-region="All">All</button>
+        <button class="filter-btn" data-region="North">North</button>
+        <button class="filter-btn" data-region="South">South</button>
+        <button class="filter-btn" data-region="East">East</button>
+        <button class="filter-btn" data-region="West">West</button>
+        <button class="filter-btn" data-region="East-Central">East-Central</button>
+        <button class="filter-btn" data-region="North-Central">North-Central</button>
+        <button class="filter-btn" data-region="West-Central">West-Central</button>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <h3>🚃 Train Type</h3>
+      <div class="btn-group" id="typeFilters">
+        <button class="filter-btn active" data-type="All">All</button>
+        <button class="filter-btn" data-type="Chair Car">Chair Car</button>
+        <button class="filter-btn type-sleeper" data-type="Sleeper">Sleeper</button>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <h3>🚋 Coach Formation</h3>
+      <div class="btn-group" id="coachFilters">
+        <button class="filter-btn active" data-coaches="All">All</button>
+        <button class="filter-btn" data-coaches="8">8-car</button>
+        <button class="filter-btn" data-coaches="16">16-car</button>
+        <button class="filter-btn" data-coaches="20">20-car</button>
+      </div>
+    </div>
+
+    <div class="count-label" id="countLabel">Showing 82 routes</div>
+    <div class="route-list" id="routeList"></div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script>
+const routes = [
+  {
+    "train": "22435/22436",
+    "from": "New Delhi",
+    "to": "Varanasi",
+    "route": "New Delhi \u2194 Varanasi",
+    "region": "North",
+    "states": "Delhi/UP",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 28.6448,
+    "from_lon": 77.2167,
+    "to_lat": 25.3176,
+    "to_lon": 82.9739,
+    "live": "https://www.railyatri.in/live-train-status/train/22435",
+    "schedule": "https://www.railyatri.in/trains/route-22435-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22439/22440",
+    "from": "SMVD Katra",
+    "to": "New Delhi",
+    "route": "SMVD Katra \u2194 New Delhi",
+    "region": "North",
+    "states": "J&K/Delhi",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "All except Tue",
+    "from_lat": 32.9812,
+    "from_lon": 74.932,
+    "to_lat": 28.6448,
+    "to_lon": 77.2167,
+    "live": "https://www.railyatri.in/live-train-status/train/22439",
+    "schedule": "https://www.railyatri.in/trains/route-22439-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20901/20902",
+    "from": "Gandhinagar Capital",
+    "to": "Mumbai Central",
+    "route": "Gandhinagar Capital \u2194 Mumbai Central",
+    "region": "West",
+    "states": "Gujarat/Maharashtra",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 23.2156,
+    "from_lon": 72.6369,
+    "to_lat": 18.9696,
+    "to_lon": 72.8193,
+    "live": "https://www.railyatri.in/live-train-status/train/20901",
+    "schedule": "https://www.railyatri.in/trains/route-20901-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22447/22448",
+    "from": "Amb Andaura",
+    "to": "New Delhi",
+    "route": "Amb Andaura \u2194 New Delhi",
+    "region": "North",
+    "states": "HP/Delhi",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 31.678,
+    "from_lon": 76.125,
+    "to_lat": 28.6448,
+    "to_lon": 77.2167,
+    "live": "https://www.railyatri.in/live-train-status/train/22447",
+    "schedule": "https://www.railyatri.in/trains/route-22447-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20607/20608",
+    "from": "Mysuru",
+    "to": "Chennai Central",
+    "route": "Mysuru \u2194 Chennai Central",
+    "region": "South",
+    "states": "Karnataka/Tamil Nadu",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 12.2958,
+    "from_lon": 76.6394,
+    "to_lat": 13.0827,
+    "to_lon": 80.2707,
+    "live": "https://www.railyatri.in/live-train-status/train/20607",
+    "schedule": "https://www.railyatri.in/trains/route-20607-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20825/20826",
+    "from": "Nagpur",
+    "to": "Bilaspur",
+    "route": "Nagpur \u2194 Bilaspur",
+    "region": "East-Central",
+    "states": "Maharashtra/Chhattisgarh",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 21.1458,
+    "from_lon": 79.0882,
+    "to_lat": 22.0797,
+    "to_lon": 82.1409,
+    "live": "https://www.railyatri.in/live-train-status/train/20825",
+    "schedule": "https://www.railyatri.in/trains/route-20825-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22301/22302",
+    "from": "New Jalpaiguri",
+    "to": "Howrah",
+    "route": "New Jalpaiguri \u2194 Howrah",
+    "region": "East",
+    "states": "West Bengal",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 26.718,
+    "from_lon": 88.3782,
+    "to_lat": 22.5851,
+    "to_lon": 88.3425,
+    "live": "https://www.railyatri.in/live-train-status/train/22301",
+    "schedule": "https://www.railyatri.in/trains/route-22301-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20833/20834",
+    "from": "Secunderabad",
+    "to": "Visakhapatnam",
+    "route": "Secunderabad \u2194 Visakhapatnam",
+    "region": "South",
+    "states": "Telangana/AP",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 17.4344,
+    "from_lon": 78.5013,
+    "to_lat": 17.6868,
+    "to_lon": 83.2185,
+    "live": "https://www.railyatri.in/live-train-status/train/20833",
+    "schedule": "https://www.railyatri.in/trains/route-20833-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22223/22224",
+    "from": "Sainagar Shirdi",
+    "to": "Mumbai CSMT",
+    "route": "Sainagar Shirdi \u2194 Mumbai CSMT",
+    "region": "West",
+    "states": "Maharashtra",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 19.7648,
+    "from_lon": 74.4777,
+    "to_lat": 18.94,
+    "to_lon": 72.8355,
+    "live": "https://www.railyatri.in/live-train-status/train/22223",
+    "schedule": "https://www.railyatri.in/trains/route-22223-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22225/22226",
+    "from": "Solapur",
+    "to": "Mumbai CSMT",
+    "route": "Solapur \u2194 Mumbai CSMT",
+    "region": "West",
+    "states": "Maharashtra",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "6 days/week",
+    "from_lat": 17.6868,
+    "from_lon": 75.9068,
+    "to_lat": 18.94,
+    "to_lon": 72.8355,
+    "live": "https://www.railyatri.in/live-train-status/train/22225",
+    "schedule": "https://www.railyatri.in/trains/route-22225-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20171/20172",
+    "from": "Hazrat Nizamuddin",
+    "to": "Rani Kamlapati",
+    "route": "Hazrat Nizamuddin \u2194 Rani Kamlapati",
+    "region": "North-Central",
+    "states": "Delhi/MP",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 28.5874,
+    "from_lon": 77.2497,
+    "to_lat": 23.2099,
+    "to_lon": 77.4084,
+    "live": "https://www.railyatri.in/live-train-status/train/20171",
+    "schedule": "https://www.railyatri.in/trains/route-20171-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20701/20702",
+    "from": "Tirupati",
+    "to": "Secunderabad",
+    "route": "Tirupati \u2194 Secunderabad",
+    "region": "South",
+    "states": "AP/Telangana",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 13.6288,
+    "from_lon": 79.4192,
+    "to_lat": 17.4344,
+    "to_lon": 78.5013,
+    "live": "https://www.railyatri.in/live-train-status/train/20701",
+    "schedule": "https://www.railyatri.in/trains/route-20701-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20643/20644",
+    "from": "Coimbatore",
+    "to": "Chennai Central",
+    "route": "Coimbatore \u2194 Chennai Central",
+    "region": "South",
+    "states": "Tamil Nadu",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 11.0168,
+    "from_lon": 76.9558,
+    "to_lat": 13.0827,
+    "to_lon": 80.2707,
+    "live": "https://www.railyatri.in/live-train-status/train/20643",
+    "schedule": "https://www.railyatri.in/trains/route-20643-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20977/20978",
+    "from": "Chandigarh",
+    "to": "Ajmer",
+    "route": "Chandigarh \u2194 Ajmer",
+    "region": "North",
+    "states": "Punjab/Haryana/Rajasthan",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 30.7333,
+    "from_lon": 76.7794,
+    "to_lat": 26.4499,
+    "to_lon": 74.6399,
+    "live": "https://www.railyatri.in/live-train-status/train/20977",
+    "schedule": "https://www.railyatri.in/trains/route-20977-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20633/20634",
+    "from": "Thiruvananthapuram",
+    "to": "Kasaragod",
+    "route": "Thiruvananthapuram \u2194 Kasaragod",
+    "region": "South",
+    "states": "Kerala",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 8.5241,
+    "from_lon": 76.9366,
+    "to_lat": 12.4996,
+    "to_lon": 74.9869,
+    "live": "https://www.railyatri.in/live-train-status/train/20633",
+    "schedule": "https://www.railyatri.in/trains/route-20633-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22895/22896",
+    "from": "Puri",
+    "to": "Howrah",
+    "route": "Puri \u2194 Howrah",
+    "region": "East",
+    "states": "Odisha/West Bengal",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 19.8135,
+    "from_lon": 85.8312,
+    "to_lat": 22.5851,
+    "to_lon": 88.3425,
+    "live": "https://www.railyatri.in/live-train-status/train/22895",
+    "schedule": "https://www.railyatri.in/trains/route-22895-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22457/22458",
+    "from": "Dehradun",
+    "to": "Anand Vihar",
+    "route": "Dehradun \u2194 Anand Vihar",
+    "region": "North",
+    "states": "Uttarakhand/Delhi",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 30.3165,
+    "from_lon": 78.0322,
+    "to_lat": 28.6459,
+    "to_lon": 77.3152,
+    "live": "https://www.railyatri.in/live-train-status/train/22457",
+    "schedule": "https://www.railyatri.in/trains/route-22457-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22227/22228",
+    "from": "New Jalpaiguri",
+    "to": "Guwahati",
+    "route": "New Jalpaiguri \u2194 Guwahati",
+    "region": "East",
+    "states": "West Bengal/Assam",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 26.718,
+    "from_lon": 88.3782,
+    "to_lat": 26.1445,
+    "to_lon": 91.7362,
+    "live": "https://www.railyatri.in/live-train-status/train/22227",
+    "schedule": "https://www.railyatri.in/trains/route-22227-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20911/20912",
+    "from": "Nagpur",
+    "to": "Indore",
+    "route": "Nagpur \u2194 Indore",
+    "region": "West-Central",
+    "states": "Maharashtra/MP",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 21.1458,
+    "from_lon": 79.0882,
+    "to_lat": 22.7196,
+    "to_lon": 75.8577,
+    "live": "https://www.railyatri.in/live-train-status/train/20911",
+    "schedule": "https://www.railyatri.in/trains/route-20911-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22229/22230",
+    "from": "Madgaon",
+    "to": "Mumbai CSMT",
+    "route": "Madgaon \u2194 Mumbai CSMT",
+    "region": "West",
+    "states": "Goa/Maharashtra",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 15.2993,
+    "from_lon": 73.9578,
+    "to_lat": 18.94,
+    "to_lon": 72.8355,
+    "live": "https://www.railyatri.in/live-train-status/train/22229",
+    "schedule": "https://www.railyatri.in/trains/route-22229-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22349/22350",
+    "from": "Ranchi",
+    "to": "Patna",
+    "route": "Ranchi \u2194 Patna",
+    "region": "East",
+    "states": "Jharkhand/Bihar",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 23.3441,
+    "from_lon": 85.3096,
+    "to_lat": 25.6014,
+    "to_lon": 85.1376,
+    "live": "https://www.railyatri.in/live-train-status/train/22349",
+    "schedule": "https://www.railyatri.in/trains/route-22349-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20661/20662",
+    "from": "Dharwad",
+    "to": "Bengaluru",
+    "route": "Dharwad \u2194 Bengaluru",
+    "region": "South",
+    "states": "Karnataka",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 15.4589,
+    "from_lon": 75.0078,
+    "to_lat": 12.9716,
+    "to_lon": 77.5946,
+    "live": "https://www.railyatri.in/live-train-status/train/20661",
+    "schedule": "https://www.railyatri.in/trains/route-20661-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20173/20174",
+    "from": "Rewa",
+    "to": "Rani Kamlapati",
+    "route": "Rewa \u2194 Rani Kamlapati",
+    "region": "North-Central",
+    "states": "MP",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 24.5362,
+    "from_lon": 81.3037,
+    "to_lat": 23.2099,
+    "to_lon": 77.4084,
+    "live": "https://www.railyatri.in/live-train-status/train/20173",
+    "schedule": "https://www.railyatri.in/trains/route-20173-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22549/22550",
+    "from": "Gorakhpur",
+    "to": "Prayagraj",
+    "route": "Gorakhpur \u2194 Prayagraj",
+    "region": "North",
+    "states": "UP",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 26.7606,
+    "from_lon": 83.3732,
+    "to_lat": 25.4358,
+    "to_lon": 81.8463,
+    "live": "https://www.railyatri.in/live-train-status/train/22549",
+    "schedule": "https://www.railyatri.in/trains/route-22549-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "12461/12462",
+    "from": "Sabarmati",
+    "to": "Jodhpur",
+    "route": "Sabarmati \u2194 Jodhpur",
+    "region": "West",
+    "states": "Gujarat/Rajasthan",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 23.0758,
+    "from_lon": 72.5874,
+    "to_lat": 26.2389,
+    "to_lon": 73.0243,
+    "live": "https://www.railyatri.in/live-train-status/train/12461",
+    "schedule": "https://www.railyatri.in/trains/route-12461-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22925/22926",
+    "from": "Okha",
+    "to": "Ahmedabad",
+    "route": "Okha \u2194 Ahmedabad",
+    "region": "West",
+    "states": "Gujarat",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 22.47,
+    "from_lon": 69.068,
+    "to_lat": 23.0225,
+    "to_lon": 72.5714,
+    "live": "https://www.railyatri.in/live-train-status/train/22925",
+    "schedule": "https://www.railyatri.in/trains/route-22925-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20665/20666",
+    "from": "Tirunelveli",
+    "to": "Chennai Egmore",
+    "route": "Tirunelveli \u2194 Chennai Egmore",
+    "region": "South",
+    "states": "Tamil Nadu",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 8.7139,
+    "from_lon": 77.7567,
+    "to_lat": 13.078,
+    "to_lon": 80.262,
+    "live": "https://www.railyatri.in/live-train-status/train/20665",
+    "schedule": "https://www.railyatri.in/trains/route-20665-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20677/20678",
+    "from": "Narsapur",
+    "to": "Chennai Central",
+    "route": "Narsapur \u2194 Chennai Central",
+    "region": "South",
+    "states": "AP/Tamil Nadu",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 16.433,
+    "from_lon": 81.696,
+    "to_lat": 13.0827,
+    "to_lon": 80.2707,
+    "live": "https://www.railyatri.in/live-train-status/train/20677",
+    "schedule": "https://www.railyatri.in/trains/route-20677-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20703/20704",
+    "from": "Kacheguda",
+    "to": "Yesvantpur",
+    "route": "Kacheguda \u2194 Yesvantpur",
+    "region": "South",
+    "states": "Telangana/Karnataka",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "All except Wed",
+    "from_lat": 17.385,
+    "from_lon": 78.4867,
+    "to_lat": 13.0228,
+    "to_lon": 77.5391,
+    "live": "https://www.railyatri.in/live-train-status/train/20703",
+    "schedule": "https://www.railyatri.in/trains/route-20703-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20631/20632",
+    "from": "Thiruvananthapuram",
+    "to": "Mangaluru Central",
+    "route": "Thiruvananthapuram \u2194 Mangaluru Central",
+    "region": "South",
+    "states": "Kerala/Karnataka",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 8.5241,
+    "from_lon": 76.9366,
+    "to_lat": 12.8698,
+    "to_lon": 74.8426,
+    "live": "https://www.railyatri.in/live-train-status/train/20631",
+    "schedule": "https://www.railyatri.in/trains/route-20631-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26963/26964",
+    "from": "Udaipur City",
+    "to": "Asarva (Ahmedabad)",
+    "route": "Udaipur City \u2194 Asarva (Ahmedabad)",
+    "region": "West",
+    "states": "Rajasthan/Gujarat",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 24.5854,
+    "from_lon": 73.7125,
+    "to_lat": 23.0483,
+    "to_lon": 72.5946,
+    "live": "https://www.railyatri.in/live-train-status/train/26963",
+    "schedule": "https://www.railyatri.in/trains/route-26963-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22347/22348",
+    "from": "Patna",
+    "to": "Howrah",
+    "route": "Patna \u2194 Howrah",
+    "region": "East",
+    "states": "Bihar/West Bengal",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 25.6014,
+    "from_lon": 85.1376,
+    "to_lat": 22.5851,
+    "to_lon": 88.3425,
+    "live": "https://www.railyatri.in/live-train-status/train/22347",
+    "schedule": "https://www.railyatri.in/trains/route-22347-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20835/20836",
+    "from": "Puri",
+    "to": "Rourkela",
+    "route": "Puri \u2194 Rourkela",
+    "region": "East",
+    "states": "Odisha/Jharkhand",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 19.8135,
+    "from_lon": 85.8312,
+    "to_lat": 22.2604,
+    "to_lon": 84.8536,
+    "live": "https://www.railyatri.in/live-train-status/train/20835",
+    "schedule": "https://www.railyatri.in/trains/route-20835-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20897/20898",
+    "from": "Ranchi",
+    "to": "Howrah",
+    "route": "Ranchi \u2194 Howrah",
+    "region": "East",
+    "states": "Jharkhand/West Bengal",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 23.3441,
+    "from_lon": 85.3096,
+    "to_lat": 22.5851,
+    "to_lon": 88.3425,
+    "live": "https://www.railyatri.in/live-train-status/train/20897",
+    "schedule": "https://www.railyatri.in/trains/route-20897-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22415/22416",
+    "from": "New Delhi",
+    "to": "Varanasi",
+    "route": "New Delhi \u2194 Varanasi",
+    "region": "North",
+    "states": "Delhi/UP",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 28.6448,
+    "from_lon": 77.2167,
+    "to_lat": 25.3176,
+    "to_lon": 82.9739,
+    "live": "https://www.railyatri.in/live-train-status/train/22415",
+    "schedule": "https://www.railyatri.in/trains/route-22415-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20641/20642",
+    "from": "Coimbatore",
+    "to": "Bengaluru Cantt",
+    "route": "Coimbatore \u2194 Bengaluru Cantt",
+    "region": "South",
+    "states": "Tamil Nadu/Karnataka",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 11.0168,
+    "from_lon": 76.9558,
+    "to_lat": 12.9852,
+    "to_lon": 77.6075,
+    "live": "https://www.railyatri.in/live-train-status/train/20641",
+    "schedule": "https://www.railyatri.in/trains/route-20641-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20645/20646",
+    "from": "Mangaluru Central",
+    "to": "Madgaon",
+    "route": "Mangaluru Central \u2194 Madgaon",
+    "region": "South",
+    "states": "Karnataka/Goa",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 12.8698,
+    "from_lon": 74.8426,
+    "to_lat": 15.2993,
+    "to_lon": 73.9578,
+    "live": "https://www.railyatri.in/live-train-status/train/20645",
+    "schedule": "https://www.railyatri.in/trains/route-20645-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20705/20706",
+    "from": "Mumbai CSMT",
+    "to": "Hazur Sahib Nanded",
+    "route": "Mumbai CSMT \u2194 Hazur Sahib Nanded",
+    "region": "West",
+    "states": "Maharashtra",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 18.94,
+    "from_lon": 72.8355,
+    "to_lat": 19.1383,
+    "to_lon": 77.2959,
+    "live": "https://www.railyatri.in/live-train-status/train/20705",
+    "schedule": "https://www.railyatri.in/trains/route-20705-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22477/22478",
+    "from": "SMVD Katra",
+    "to": "New Delhi",
+    "route": "SMVD Katra \u2194 New Delhi",
+    "region": "North",
+    "states": "J&K/Delhi",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "All except Tue",
+    "from_lat": 32.9812,
+    "from_lon": 74.932,
+    "to_lat": 28.6448,
+    "to_lon": 77.2167,
+    "live": "https://www.railyatri.in/live-train-status/train/22477",
+    "schedule": "https://www.railyatri.in/trains/route-22477-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22425/22426",
+    "from": "Anand Vihar",
+    "to": "Ayodhya Cantt",
+    "route": "Anand Vihar \u2194 Ayodhya Cantt",
+    "region": "North",
+    "states": "Delhi/UP",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 28.6459,
+    "from_lon": 77.3152,
+    "to_lat": 26.7922,
+    "to_lon": 82.1998,
+    "live": "https://www.railyatri.in/live-train-status/train/22425",
+    "schedule": "https://www.railyatri.in/trains/route-22425-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22487/22488",
+    "from": "Amritsar",
+    "to": "Delhi Junction",
+    "route": "Amritsar \u2194 Delhi Junction",
+    "region": "North",
+    "states": "Punjab/Delhi",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 31.634,
+    "from_lon": 74.8723,
+    "to_lat": 28.656,
+    "to_lon": 77.2265,
+    "live": "https://www.railyatri.in/live-train-status/train/22487",
+    "schedule": "https://www.railyatri.in/trains/route-22487-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22962/22961",
+    "from": "Ahmedabad",
+    "to": "Mumbai Central",
+    "route": "Ahmedabad \u2194 Mumbai Central",
+    "region": "West",
+    "states": "Gujarat/Maharashtra",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 23.0225,
+    "from_lon": 72.5714,
+    "to_lat": 18.9696,
+    "to_lon": 72.8193,
+    "live": "https://www.railyatri.in/live-train-status/train/22962",
+    "schedule": "https://www.railyatri.in/trains/route-22962-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20707/20708",
+    "from": "Visakhapatnam",
+    "to": "Secunderabad",
+    "route": "Visakhapatnam \u2194 Secunderabad",
+    "region": "South",
+    "states": "AP/Telangana",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 17.6868,
+    "from_lon": 83.2185,
+    "to_lat": 17.4344,
+    "to_lon": 78.5013,
+    "live": "https://www.railyatri.in/live-train-status/train/20707",
+    "schedule": "https://www.railyatri.in/trains/route-20707-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20663/20664",
+    "from": "Chennai Central",
+    "to": "Mysuru",
+    "route": "Chennai Central \u2194 Mysuru",
+    "region": "South",
+    "states": "Tamil Nadu/Karnataka",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 13.0827,
+    "from_lon": 80.2707,
+    "to_lat": 12.2958,
+    "to_lon": 76.6394,
+    "live": "https://www.railyatri.in/live-train-status/train/20663",
+    "schedule": "https://www.railyatri.in/trains/route-20663-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22233/22234",
+    "from": "Patna",
+    "to": "New Jalpaiguri",
+    "route": "Patna \u2194 New Jalpaiguri",
+    "region": "East",
+    "states": "Bihar/West Bengal",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 25.6014,
+    "from_lon": 85.1376,
+    "to_lat": 26.718,
+    "to_lon": 88.3782,
+    "live": "https://www.railyatri.in/live-train-status/train/22233",
+    "schedule": "https://www.railyatri.in/trains/route-22233-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22470/22469",
+    "from": "Hazrat Nizamuddin",
+    "to": "Khajuraho",
+    "route": "Hazrat Nizamuddin \u2194 Khajuraho",
+    "region": "North-Central",
+    "states": "Delhi/MP",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 28.5874,
+    "from_lon": 77.2497,
+    "to_lat": 24.8318,
+    "to_lon": 79.9199,
+    "live": "https://www.railyatri.in/live-train-status/train/22469",
+    "schedule": "https://www.railyatri.in/trains/route-22469-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22231/22232",
+    "from": "Kalaburagi",
+    "to": "Bengaluru (SMVT)",
+    "route": "Kalaburagi \u2194 Bengaluru (SMVT)",
+    "region": "South",
+    "states": "Karnataka",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "All except Fri/Thu",
+    "from_lat": 17.3297,
+    "from_lon": 76.8343,
+    "to_lat": 13.0072,
+    "to_lon": 77.5669,
+    "live": "https://www.railyatri.in/live-train-status/train/22231",
+    "schedule": "https://www.railyatri.in/trains/route-22231-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20841/20842",
+    "from": "Visakhapatnam",
+    "to": "Bhubaneswar",
+    "route": "Visakhapatnam \u2194 Bhubaneswar",
+    "region": "East",
+    "states": "AP/Odisha",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 17.6868,
+    "from_lon": 83.2185,
+    "to_lat": 20.2961,
+    "to_lon": 85.8245,
+    "live": "https://www.railyatri.in/live-train-status/train/20841",
+    "schedule": "https://www.railyatri.in/trains/route-20841-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22345/22346",
+    "from": "Gomti Nagar",
+    "to": "Patna",
+    "route": "Gomti Nagar \u2194 Patna",
+    "region": "East",
+    "states": "UP/Bihar",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 26.885,
+    "from_lon": 81.01,
+    "to_lat": 25.6014,
+    "to_lon": 85.1376,
+    "live": "https://www.railyatri.in/live-train-status/train/22345",
+    "schedule": "https://www.railyatri.in/trains/route-22345-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20887/20888",
+    "from": "Varanasi",
+    "to": "Ranchi",
+    "route": "Varanasi \u2194 Ranchi",
+    "region": "East-Central",
+    "states": "UP/Jharkhand",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 25.3176,
+    "from_lon": 82.9739,
+    "to_lat": 23.3441,
+    "to_lon": 85.3096,
+    "live": "https://www.railyatri.in/live-train-status/train/20887",
+    "schedule": "https://www.railyatri.in/trains/route-20887-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22545/22546",
+    "from": "Dehradun",
+    "to": "Lucknow Jn",
+    "route": "Dehradun \u2194 Lucknow Jn",
+    "region": "North",
+    "states": "Uttarakhand/UP",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 30.3165,
+    "from_lon": 78.0322,
+    "to_lat": 26.8467,
+    "to_lon": 80.9462,
+    "live": "https://www.railyatri.in/live-train-status/train/22545",
+    "schedule": "https://www.railyatri.in/trains/route-22545-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22490/22489",
+    "from": "Varanasi",
+    "to": "Meerut City",
+    "route": "Varanasi \u2194 Meerut City",
+    "region": "North",
+    "states": "UP",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 25.3176,
+    "from_lon": 82.9739,
+    "to_lat": 28.9845,
+    "to_lon": 77.7064,
+    "live": "https://www.railyatri.in/live-train-status/train/22489",
+    "schedule": "https://www.railyatri.in/trains/route-22489-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20627/20628",
+    "from": "Nagercoil",
+    "to": "Chennai Egmore",
+    "route": "Nagercoil \u2194 Chennai Egmore",
+    "region": "South",
+    "states": "Tamil Nadu",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 8.1757,
+    "from_lon": 77.4316,
+    "to_lat": 13.078,
+    "to_lon": 80.262,
+    "live": "https://www.railyatri.in/live-train-status/train/20627",
+    "schedule": "https://www.railyatri.in/trains/route-20627-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20671/20672",
+    "from": "Bengaluru Cantt",
+    "to": "Madurai",
+    "route": "Bengaluru Cantt \u2194 Madurai",
+    "region": "South",
+    "states": "Karnataka/Tamil Nadu",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 12.9852,
+    "from_lon": 77.6075,
+    "to_lat": 9.9252,
+    "to_lon": 78.1198,
+    "live": "https://www.railyatri.in/live-train-status/train/20671",
+    "schedule": "https://www.railyatri.in/trains/route-20671-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22500/22499",
+    "from": "Deoghar",
+    "to": "Varanasi",
+    "route": "Deoghar \u2194 Varanasi",
+    "region": "East-Central",
+    "states": "Jharkhand/UP",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 24.485,
+    "from_lon": 86.6939,
+    "to_lat": 25.3176,
+    "to_lon": 82.9739,
+    "live": "https://www.railyatri.in/live-train-status/train/22499",
+    "schedule": "https://www.railyatri.in/trains/route-22499-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22309/22310",
+    "from": "Jamalpur",
+    "to": "Howrah",
+    "route": "Jamalpur \u2194 Howrah",
+    "region": "East",
+    "states": "Bihar/West Bengal",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 25.309,
+    "from_lon": 86.4903,
+    "to_lat": 22.5851,
+    "to_lon": 88.3425,
+    "live": "https://www.railyatri.in/live-train-status/train/22309",
+    "schedule": "https://www.railyatri.in/trains/route-22309-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20871/20872",
+    "from": "Rourkela",
+    "to": "Howrah",
+    "route": "Rourkela \u2194 Howrah",
+    "region": "East",
+    "states": "Jharkhand/West Bengal",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 22.2604,
+    "from_lon": 84.8536,
+    "to_lat": 22.5851,
+    "to_lon": 88.3425,
+    "live": "https://www.railyatri.in/live-train-status/train/20871",
+    "schedule": "https://www.railyatri.in/trains/route-20871-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20893/20894",
+    "from": "Patna",
+    "to": "Tatanagar",
+    "route": "Patna \u2194 Tatanagar",
+    "region": "East",
+    "states": "Bihar/Jharkhand",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 25.6014,
+    "from_lon": 85.1376,
+    "to_lat": 22.7895,
+    "to_lon": 86.1853,
+    "live": "https://www.railyatri.in/live-train-status/train/20893",
+    "schedule": "https://www.railyatri.in/trains/route-20893-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20892/20891",
+    "from": "Tatanagar",
+    "to": "Brahmapur",
+    "route": "Tatanagar \u2194 Brahmapur",
+    "region": "East",
+    "states": "Jharkhand/Odisha",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 22.7895,
+    "from_lon": 86.1853,
+    "to_lat": 19.315,
+    "to_lon": 84.7941,
+    "live": "https://www.railyatri.in/live-train-status/train/20891",
+    "schedule": "https://www.railyatri.in/trains/route-20891-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "22303/22304",
+    "from": "Howrah",
+    "to": "Gaya",
+    "route": "Howrah \u2194 Gaya",
+    "region": "East",
+    "states": "West Bengal/Bihar",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 22.5851,
+    "from_lon": 88.3425,
+    "to_lat": 24.7914,
+    "to_lon": 84.9994,
+    "live": "https://www.railyatri.in/live-train-status/train/22303",
+    "schedule": "https://www.railyatri.in/trains/route-22303-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20669/20670",
+    "from": "Pune",
+    "to": "Hubballi",
+    "route": "Pune \u2194 Hubballi",
+    "region": "South",
+    "states": "Maharashtra/Karnataka",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 18.5204,
+    "from_lon": 73.8567,
+    "to_lat": 15.3647,
+    "to_lon": 75.124,
+    "live": "https://www.railyatri.in/live-train-status/train/20669",
+    "schedule": "https://www.railyatri.in/trains/route-20669-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20673/20674",
+    "from": "Pune",
+    "to": "Kolhapur",
+    "route": "Pune \u2194 Kolhapur",
+    "region": "West",
+    "states": "Maharashtra",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 18.5204,
+    "from_lon": 73.8567,
+    "to_lat": 16.705,
+    "to_lon": 74.2433,
+    "live": "https://www.railyatri.in/live-train-status/train/20673",
+    "schedule": "https://www.railyatri.in/trains/route-20673-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20101/20102",
+    "from": "Secunderabad",
+    "to": "Nagpur",
+    "route": "Secunderabad \u2194 Nagpur",
+    "region": "South",
+    "states": "Telangana/Maharashtra",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 17.4344,
+    "from_lon": 78.5013,
+    "to_lat": 21.1458,
+    "to_lon": 79.0882,
+    "live": "https://www.railyatri.in/live-train-status/train/20101",
+    "schedule": "https://www.railyatri.in/trains/route-20101-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20829/20830",
+    "from": "Visakhapatnam",
+    "to": "Durg",
+    "route": "Visakhapatnam \u2194 Durg",
+    "region": "East-Central",
+    "states": "AP/Chhattisgarh",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 17.6868,
+    "from_lon": 83.2185,
+    "to_lat": 21.1904,
+    "to_lon": 81.2849,
+    "live": "https://www.railyatri.in/live-train-status/train/20829",
+    "schedule": "https://www.railyatri.in/trains/route-20829-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "21893/21894",
+    "from": "Patna",
+    "to": "Tatanagar",
+    "route": "Patna \u2194 Tatanagar",
+    "region": "East",
+    "states": "Bihar/Jharkhand",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 25.6014,
+    "from_lon": 85.1376,
+    "to_lat": 22.7895,
+    "to_lon": 86.1853,
+    "live": "https://www.railyatri.in/live-train-status/train/21893",
+    "schedule": "https://www.railyatri.in/trains/route-21893-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "21895/21896",
+    "from": "Patna",
+    "to": "Tatanagar",
+    "route": "Patna \u2194 Tatanagar",
+    "region": "East",
+    "states": "Bihar/Jharkhand",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 25.6014,
+    "from_lon": 85.1376,
+    "to_lat": 22.7895,
+    "to_lon": 86.1853,
+    "live": "https://www.railyatri.in/live-train-status/train/21895",
+    "schedule": "https://www.railyatri.in/trains/route-21895-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "20176/20175",
+    "from": "Banaras",
+    "to": "Agra Cantt",
+    "route": "Banaras \u2194 Agra Cantt",
+    "region": "North",
+    "states": "UP",
+    "type": "Chair Car",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 25.3176,
+    "from_lon": 83.0102,
+    "to_lat": 27.1767,
+    "to_lon": 78.0081,
+    "live": "https://www.railyatri.in/live-train-status/train/20175",
+    "schedule": "https://www.railyatri.in/trains/route-20175-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26901/26902",
+    "from": "Veraval",
+    "to": "Sabarmati",
+    "route": "Veraval \u2194 Sabarmati",
+    "region": "West",
+    "states": "Gujarat",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 20.907,
+    "from_lon": 70.3674,
+    "to_lat": 23.0758,
+    "to_lon": 72.5874,
+    "live": "https://www.railyatri.in/live-train-status/train/26901",
+    "schedule": "https://www.railyatri.in/trains/route-26901-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26401/26402",
+    "from": "Jammu Tawi",
+    "to": "Srinagar",
+    "route": "Jammu Tawi \u2194 Srinagar",
+    "region": "North",
+    "states": "J&K",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 32.7185,
+    "from_lon": 74.857,
+    "to_lat": 34.0837,
+    "to_lon": 74.7973,
+    "live": "https://www.railyatri.in/live-train-status/train/26401",
+    "schedule": "https://www.railyatri.in/trains/route-26401-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26403/26404",
+    "from": "Jammu Tawi",
+    "to": "Srinagar",
+    "route": "Jammu Tawi \u2194 Srinagar",
+    "region": "North",
+    "states": "J&K",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 32.7185,
+    "from_lon": 74.857,
+    "to_lat": 34.0837,
+    "to_lon": 74.7973,
+    "live": "https://www.railyatri.in/live-train-status/train/26403",
+    "schedule": "https://www.railyatri.in/trains/route-26403-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26502/26501",
+    "from": "Patliputra",
+    "to": "Gorakhpur",
+    "route": "Patliputra \u2194 Gorakhpur",
+    "region": "North",
+    "states": "Bihar/UP",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 25.639,
+    "from_lon": 85.09,
+    "to_lat": 26.7606,
+    "to_lon": 83.3732,
+    "live": "https://www.railyatri.in/live-train-status/train/26501",
+    "schedule": "https://www.railyatri.in/trains/route-26501-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26751/26752",
+    "from": "KSR Bengaluru",
+    "to": "Belagavi",
+    "route": "KSR Bengaluru \u2194 Belagavi",
+    "region": "South",
+    "states": "Karnataka",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 12.9772,
+    "from_lon": 77.5713,
+    "to_lat": 15.8497,
+    "to_lon": 74.4977,
+    "live": "https://www.railyatri.in/live-train-status/train/26751",
+    "schedule": "https://www.railyatri.in/trains/route-26751-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26406/26405",
+    "from": "Amritsar",
+    "to": "SMVD Katra",
+    "route": "Amritsar \u2194 SMVD Katra",
+    "region": "North",
+    "states": "Punjab/J&K",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 31.634,
+    "from_lon": 74.8723,
+    "to_lat": 32.9812,
+    "to_lon": 74.932,
+    "live": "https://www.railyatri.in/live-train-status/train/26405",
+    "schedule": "https://www.railyatri.in/trains/route-26405-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26101/26102",
+    "from": "Pune",
+    "to": "Nagpur (Ajni)",
+    "route": "Pune \u2194 Nagpur (Ajni)",
+    "region": "West",
+    "states": "Maharashtra",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 18.5204,
+    "from_lon": 73.8567,
+    "to_lat": 21.1458,
+    "to_lon": 79.0882,
+    "live": "https://www.railyatri.in/live-train-status/train/26101",
+    "schedule": "https://www.railyatri.in/trains/route-26101-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26302/26301",
+    "from": "Jogbani",
+    "to": "Danapur",
+    "route": "Jogbani \u2194 Danapur",
+    "region": "East",
+    "states": "Bihar",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 26.3826,
+    "from_lon": 87.2637,
+    "to_lat": 25.6113,
+    "to_lon": 85.0455,
+    "live": "https://www.railyatri.in/live-train-status/train/26301",
+    "schedule": "https://www.railyatri.in/trains/route-26301-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26481/26482",
+    "from": "Delhi Cantt",
+    "to": "Jodhpur",
+    "route": "Delhi Cantt \u2194 Jodhpur",
+    "region": "North",
+    "states": "Delhi/Rajasthan",
+    "type": "Chair Car",
+    "coaches": 20,
+    "freq": "Daily",
+    "from_lat": 28.5992,
+    "from_lon": 77.1388,
+    "to_lat": 26.2389,
+    "to_lon": 73.0243,
+    "live": "https://www.railyatri.in/live-train-status/train/26481",
+    "schedule": "https://www.railyatri.in/trains/route-26481-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26471/26472",
+    "from": "Delhi Cantt",
+    "to": "Bikaner",
+    "route": "Delhi Cantt \u2194 Bikaner",
+    "region": "North",
+    "states": "Delhi/Rajasthan",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 28.5992,
+    "from_lon": 77.1388,
+    "to_lat": 28.0229,
+    "to_lon": 73.3119,
+    "live": "https://www.railyatri.in/live-train-status/train/26471",
+    "schedule": "https://www.railyatri.in/trains/route-26471-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26462/26461",
+    "from": "New Delhi",
+    "to": "Firozpur Cantt",
+    "route": "New Delhi \u2194 Firozpur Cantt",
+    "region": "North",
+    "states": "Delhi/Punjab",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 28.6448,
+    "from_lon": 77.2167,
+    "to_lat": 30.9254,
+    "to_lon": 74.6101,
+    "live": "https://www.railyatri.in/live-train-status/train/26461",
+    "schedule": "https://www.railyatri.in/trains/route-26461-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26651/26652",
+    "from": "Ernakulam Jn",
+    "to": "KSR Bengaluru",
+    "route": "Ernakulam Jn \u2194 KSR Bengaluru",
+    "region": "South",
+    "states": "Kerala/Karnataka",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "6 days/week",
+    "from_lat": 9.9816,
+    "from_lon": 76.2999,
+    "to_lat": 12.9772,
+    "to_lon": 77.5713,
+    "live": "https://www.railyatri.in/live-train-status/train/26651",
+    "schedule": "https://www.railyatri.in/trains/route-26651-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26506/26505",
+    "from": "Khajuraho",
+    "to": "Banaras",
+    "route": "Khajuraho \u2194 Banaras",
+    "region": "North-Central",
+    "states": "MP/UP",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 24.8318,
+    "from_lon": 79.9199,
+    "to_lat": 25.3176,
+    "to_lon": 83.0102,
+    "live": "https://www.railyatri.in/live-train-status/train/26505",
+    "schedule": "https://www.railyatri.in/trains/route-26505-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "26504/26503",
+    "from": "Saharanpur",
+    "to": "Gomti Nagar",
+    "route": "Saharanpur \u2194 Gomti Nagar",
+    "region": "North",
+    "states": "UP",
+    "type": "Chair Car",
+    "coaches": 8,
+    "freq": "Daily",
+    "from_lat": 29.9676,
+    "from_lon": 77.546,
+    "to_lat": 26.885,
+    "to_lon": 81.01,
+    "live": "https://www.railyatri.in/live-train-status/train/26503",
+    "schedule": "https://www.railyatri.in/trains/route-26503-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  },
+  {
+    "train": "27575/27576",
+    "from": "Howrah",
+    "to": "Kamakhya",
+    "route": "Howrah \u2194 Kamakhya",
+    "region": "East",
+    "states": "West Bengal/Assam",
+    "type": "Sleeper",
+    "coaches": 16,
+    "freq": "Daily",
+    "from_lat": 22.5851,
+    "from_lon": 88.3425,
+    "to_lat": 26.16,
+    "to_lon": 91.66,
+    "live": "https://www.railyatri.in/live-train-status/train/27575",
+    "schedule": "https://www.railyatri.in/trains/route-27575-vande-bharat-expres",
+    "book": "https://www.irctc.co.in/nget/train-search"
+  }
+];
+
+let activeRegion = "All", activeType = "All", activeCoaches = "All", searchVal = "";
+let mapLines = [], mapMarkers = [];
+let selectedTrain = null;
+
+// Init map
+const map = L.map('map').setView([22.5, 82.0], 5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO', maxZoom: 18
+}).addTo(map);
+
+function getColor(region) {
+  const colors = { North:"#f97316", South:"#22c55e", East:"#60a5fa", West:"#f59e0b",
+    "East-Central":"#a78bfa", "North-Central":"#fb7185", "West-Central":"#34d399" };
+  return colors[region] || "#94a3b8";
+}
+
+function filterRoutes() {
+  return routes.filter(r => {
+    const matchRegion = activeRegion === "All" || r.region === activeRegion;
+    const matchType = activeType === "All" || r.type === activeType;
+    const matchCoach = activeCoaches === "All" || r.coaches === parseInt(activeCoaches);
+    const q = searchVal.toLowerCase();
+    const matchSearch = !q || r.from.toLowerCase().includes(q) || r.to.toLowerCase().includes(q) ||
+      r.route.toLowerCase().includes(q) || r.states.toLowerCase().includes(q) ||
+      r.train.toLowerCase().includes(q) || r.region.toLowerCase().includes(q);
+    return matchRegion && matchType && matchCoach && matchSearch;
+  });
+}
+
+function renderList() {
+  const filtered = filterRoutes();
+  document.getElementById('countLabel').textContent = `Showing ${filtered.length} routes`;
+
+  const chair = filtered.filter(r => r.type === "Chair Car").length;
+  const sleep = filtered.filter(r => r.type === "Sleeper").length;
+  document.getElementById('st-total').textContent = filtered.length;
+  document.getElementById('st-chair').textContent = chair;
+  document.getElementById('st-sleep').textContent = sleep;
+
+  const list = document.getElementById('routeList');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="no-results">No routes match your filters</div>';
+    renderMap([]);
+    return;
+  }
+  list.innerHTML = filtered.map(r => `
+    <div class="route-card ${selectedTrain === r.train ? 'active' : ''}" onclick="selectRoute('${r.train}')">
+      <div class="rno">${r.train}</div>
+      <div class="rname">${r.from} ↔ ${r.to}</div>
+      <div class="rmeta">
+        <span class="tag tag-region">${r.region}</span>
+        <span class="tag tag-coaches">${r.coaches}-car</span>
+        <span class="tag tag-type">${r.type}</span>
+        <span class="tag tag-freq">${r.freq}</span>
+      </div>
+      <div style="font-size:0.7rem; color:#64748b; margin-top:4px;">📍 ${r.states}</div>
+      <div class="action-links">
+        <a class="a-live" href="${r.live}" target="_blank">🔴 Live Status</a>
+        <a class="a-sched" href="${r.schedule}" target="_blank">📅 Schedule</a>
+        <a class="a-book" href="${r.book}" target="_blank">🎫 Book</a>
+      </div>
+    </div>`).join('');
+  renderMap(filtered);
+}
+
+function renderMap(filtered) {
+  mapLines.forEach(l => map.removeLayer(l));
+  mapMarkers.forEach(m => map.removeLayer(m));
+  mapLines = []; mapMarkers = [];
+
+  filtered.forEach(r => {
+    if (!r.from_lat || !r.to_lat) return;
+    const col = getColor(r.region);
+    const line = L.polyline([[r.from_lat, r.from_lon],[r.to_lat, r.to_lon]], {
+      color: col, weight: selectedTrain === r.train ? 4 : 1.8,
+      opacity: selectedTrain === r.train ? 1 : 0.55, dashArray: r.type === 'Sleeper' ? '8,4' : null
+    }).addTo(map);
+    line.bindPopup(`<b>${r.train}</b><br>${r.from} ↔ ${r.to}<br>Region: ${r.region}<br>Type: ${r.type} | ${r.coaches}-car<br>Frequency: ${r.freq}<br><a href="${r.live}" target="_blank" style="color:#f97316">🔴 Live Status</a> | <a href="${r.schedule}" target="_blank" style="color:#60a5fa">📅 Schedule</a>`);
+    mapLines.push(line);
+
+    [[r.from_lat, r.from_lon, r.from],[r.to_lat, r.to_lon, r.to]].forEach(([lat,lon,name]) => {
+      const dot = L.circleMarker([lat,lon], {radius:4, fillColor:col, color:'#fff', weight:1, fillOpacity:0.85}).addTo(map);
+      dot.bindTooltip(name, {permanent:false, direction:'top'});
+      mapMarkers.push(dot);
+    });
+  });
+}
+
+function selectRoute(trainNo) {
+  selectedTrain = selectedTrain === trainNo ? null : trainNo;
+  renderList();
+  if (selectedTrain) {
+    const r = routes.find(x => x.train === trainNo);
+    if (r && r.from_lat && r.to_lat) {
+      map.fitBounds([[r.from_lat, r.from_lon],[r.to_lat, r.to_lon]], {padding:[60,60]});
+    }
+  }
+}
+
+// Filter buttons
+document.getElementById('regionFilters').addEventListener('click', e => {
+  if (!e.target.dataset.region) return;
+  activeRegion = e.target.dataset.region;
+  document.querySelectorAll('#regionFilters .filter-btn').forEach(b => b.classList.toggle('active', b.dataset.region === activeRegion));
+  renderList();
+});
+
+document.getElementById('typeFilters').addEventListener('click', e => {
+  if (!e.target.dataset.type) return;
+  activeType = e.target.dataset.type;
+  document.querySelectorAll('#typeFilters .filter-btn').forEach(b => b.classList.toggle('active', b.dataset.type === activeType));
+  renderList();
+});
+
+document.getElementById('coachFilters').addEventListener('click', e => {
+  if (!e.target.dataset.coaches) return;
+  activeCoaches = e.target.dataset.coaches;
+  document.querySelectorAll('#coachFilters .filter-btn').forEach(b => b.classList.toggle('active', b.dataset.coaches === activeCoaches));
+  renderList();
+});
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchVal = e.target.value;
+  renderList();
+});
+
+renderList();
+</script>
+</body>
+</html>
